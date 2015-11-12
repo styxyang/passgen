@@ -71,13 +71,13 @@ const char * foo(const uint8_t *salt, const uint8_t *passphrase, const uint8_t *
     array_buf = pack_array(5, &nb_array);
     datalen += nb_array;
 
-    ver_buf = pack_string(ver, &nb_ver);
+    ver_buf = pack_string((char *)ver, &nb_ver);
     datalen += nb_ver;
 
-    salt_buf = pack_string(salt, &nb_salt);
+    salt_buf = pack_string((char *)salt, &nb_salt);
     datalen += nb_salt;
 
-    site_buf = pack_string(site, &nb_site);
+    site_buf = pack_string((char *)site, &nb_site);
     datalen += nb_site;
 
     if (DEBUG) {
@@ -111,7 +111,8 @@ const char * foo(const uint8_t *salt, const uint8_t *passphrase, const uint8_t *
     OPENSSL_config(NULL);
 
     /* password based derivation routines with salt and iteration count */
-    PKCS5_PBKDF2_HMAC(passphrase, strlen(passphrase), salt, strlen(salt),
+    PKCS5_PBKDF2_HMAC((char *)passphrase, strlen((char *)passphrase),
+            salt, strlen((char *)salt),
             itercnt, EVP_sha512(), KEYLEN, derived_key);
 
     if (DEBUG) {
@@ -180,7 +181,7 @@ static int generate(lua_State *L)
 
     /* push result to stack to lua */
     /* lua_pushnumber(L, 1000); */
-    lua_pushstring(L, foo(salt, passphrase, site, gen, (1 << iter)));
+    lua_pushstring(L, foo((uint8_t *)salt, (uint8_t *)passphrase, (uint8_t *)site, gen, (1 << iter)));
 
     return 1;
 }
