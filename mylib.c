@@ -1,4 +1,5 @@
 #include "mylib.h"
+#include "passgen_pack.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -14,9 +15,11 @@
 #include <lua.h>
 #include <lauxlib.h>
 
-#define DEBUG 0
+#define DEBUG 1
 /* length of derived key */
 #define KEYLEN 64
+
+const char *ver = "OneShallPass v2.0";
 
 char * base64(unsigned char * input, int length) {
 
@@ -41,26 +44,78 @@ char * base64(unsigned char * input, int length) {
     return output;
 }
 
-const char * foo(const char *salt, const char *passphrase, const char *site)
+static void print_bytes(uint8_t *v, size_t n, const char *name)
+{
+    int i;
+
+    printf("%s:", name);
+    for (i = 0; i < n; i++) {
+        printf(" %d", v[i]);
+    }
+    printf("\n");
+}
+
+const char * foo(const char *salt, const char *passphrase, const char *site,
+        uint32_t generation, uint32_t itercnt)
 {
     char derived_key[KEYLEN] = { 0 };
     char hexResult[2 * KEYLEN + 1] = { 0 };
     unsigned int md_len = 0;
     /* unsigned char *md = NULL; */
-    /* char *data = "OneShallPass v2.0saltgoogle.com10"; */
-    unsigned char data[] = {149, 177, 79, 110, 101, 83, 104, 97, 108, 108, 80, 97, 115, 115, 32, 118, 50, 46, 48, 164, 115, 97, 108, 116, 170, 103, 111, 111, 103, 108, 101, 46, 99, 111, 109, 1, 0};
+    uint8_t *ver_buf = NULL, *salt_buf = NULL, *site_buf = NULL, *array_buf = NULL;
+    size_t nb_array = 0, nb_ver = 0, nb_salt = 0, nb_site = 0;
     int i;
+    uint8_t *data = NULL;
+    size_t datalen = 0;
+
+    array_buf = pack_array(5, &nb_array);
+    datalen += nb_array;
+
+    ver_buf = pack_string(ver, &nb_ver);
+    datalen += nb_ver;
+
+    salt_buf = pack_string(salt, &nb_salt);
+    datalen += nb_salt;
+
+    site_buf = pack_string(site, &nb_site);
+    datalen += nb_site;
+
+    if (DEBUG) {
+        print_bytes(array_buf, nb_array, "array");
+        print_bytes(ver_buf, nb_ver, "var");
+        print_bytes(salt_buf, nb_salt, "salt");
+        print_bytes(site_buf, nb_site, "site");
+    }
+
+    datalen += 2;
+
+    data = malloc(datalen * sizeof(uint8_t));
+    memcpy(data, array_buf, nb_array);
+    memcpy(data + nb_array, ver_buf, nb_ver);
+    memcpy(data + nb_array + nb_ver, salt_buf, nb_salt);
+    memcpy(data + nb_array + nb_ver + nb_salt, site_buf, nb_site);
+    data[nb_array + nb_ver + nb_salt + nb_site] = generation;
+    data[nb_array + nb_ver + nb_salt + nb_site + 1] = itercnt;
+    free(array_buf);
+    free(ver_buf);
+    free(salt_buf);
+    free(site_buf);
+
+    /* unsigned char data[] = {149, 177, 79, 110, 101, 83, 104, 97, 108, 108, 80, 97, 115, 115, 32, 118, 50, 46, 48, 164, 115, 97, 108, 116, 170, 103, 111, 111, 103, 108, 101, 46, 99, 111, 109, 1, 0}; */
+    if (DEBUG) {
+        print_bytes(data, datalen, "data");
+    }
 
     ERR_load_crypto_strings();
     OpenSSL_add_all_algorithms();
     OPENSSL_config(NULL);
 
     /* password based derivation routines with salt and iteration count */
-    PKCS5_PBKDF2_HMAC("password", 8, "salt", 4, 256, EVP_sha512(), KEYLEN, derived_key);
+    PKCS5_PBKDF2_HMAC(passphrase, strlen(passphrase), salt, strlen(salt),
+            itercnt, EVP_sha512(), KEYLEN, derived_key);
 
     if (DEBUG) {
-        for (i = 0; i < KEYLEN; i++)
-        {
+        for (i = 0; i < KEYLEN; i++) {
             sprintf(hexResult + (i * 2), "%02x", 255 & derived_key[i]);
             /* binResult[i] = digest[i]; */
         };
@@ -73,7 +128,7 @@ const char * foo(const char *salt, const char *passphrase, const char *site)
 
     
     /* unsigned char *digest = HMAC(EVP_sha512(), derived_key, KEYLEN, data, sizeof(data), NULL, &md_len); */
-    unsigned char *digest = HMAC(EVP_sha512(), derived_key, KEYLEN, data, sizeof(data), NULL, &md_len);
+    unsigned char *digest = HMAC(EVP_sha512(), derived_key, KEYLEN, data, datalen, NULL, &md_len);
     printf("md_len: %d\n", md_len);
 
     if (DEBUG) {
@@ -84,7 +139,6 @@ const char * foo(const char *salt, const char *passphrase, const char *site)
         };
 
         digest[md_len] = 0;
-        printf("digest raw: %s\n", digest);
 
         printf("digest:\n");
         for (i = 0; i< md_len/4; i++) {
@@ -108,6 +162,7 @@ static int passgen(lua_State *L)
     const char *salt = NULL;
     const char *passphrase = NULL;
     const char *site = NULL;
+    uint32_t gen, iter;
     int num_args = 0;
 
     num_args = lua_gettop(L);
@@ -116,6 +171,8 @@ static int passgen(lua_State *L)
     salt = lua_tostring(L, 1);
     passphrase = lua_tostring(L, 2);
     site = lua_tostring(L, 3);
+    gen = lua_tonumber(L, 4);
+    iter = lua_tonumber(L, 5);
 
     if (DEBUG) {
         printf("%s %s %s\n", salt, passphrase, site);
@@ -123,7 +180,7 @@ static int passgen(lua_State *L)
 
     /* push result to stack to lua */
     /* lua_pushnumber(L, 1000); */
-    lua_pushstring(L, foo(salt, passphrase, site));
+    lua_pushstring(L, foo(salt, passphrase, site, gen, (1 << iter)));
 
     return 1;
 }
