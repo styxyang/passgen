@@ -11,9 +11,9 @@ none :
 	@echo "Please do 'make LUA_VER' where LUA_VER is one of these:"
 	@echo "   $(LUA_VERSIONS)"
 
-lua52: LUA_VER_FLAG = LUA_52
+lua52: LUA_VER_FLAG = LUA_52 LUA_INC=/usr/include/lua5.2/
 
-lua51: LUA_VER_FLAG = LUA_51
+lua51: LUA_VER_FLAG = LUA_51 LUA_INC=/usr/include/lua5.1/
 
 lua51 lua52: 
 	$(MAKE) all LUA_VER_FLAG=$(LUA_VER_FLAG)
