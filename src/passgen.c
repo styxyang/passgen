@@ -1,4 +1,4 @@
-#include "mylib.h"
+#include "passgen.h"
 #include "passgen_pack.h"
 
 #include <stdio.h>
@@ -55,10 +55,10 @@ static void print_bytes(uint8_t *v, size_t n, const char *name)
     printf("\n");
 }
 
-const char * foo(const char *salt, const char *passphrase, const char *site,
+const char * foo(const uint8_t *salt, const uint8_t *passphrase, const uint8_t *site,
         uint32_t generation, uint32_t itercnt)
 {
-    char derived_key[KEYLEN] = { 0 };
+    uint8_t derived_key[KEYLEN] = { 0 };
     char hexResult[2 * KEYLEN + 1] = { 0 };
     unsigned int md_len = 0;
     /* unsigned char *md = NULL; */
@@ -157,7 +157,7 @@ const char * foo(const char *salt, const char *passphrase, const char *site,
 }
 
 /* Lua interface */
-static int passgen(lua_State *L)
+static int generate(lua_State *L)
 {
     const char *salt = NULL;
     const char *passphrase = NULL;
@@ -185,18 +185,17 @@ static int passgen(lua_State *L)
     return 1;
 }
 
-static const luaL_Reg mylib[] = {
-    { "passgen", passgen },
+static const luaL_Reg passgen[] = {
+    { "generate", generate },
     { NULL, NULL },
 };
 
-int luaopen_mylib(lua_State *L)
+int luaopen_passgen(lua_State *L)
 {
 #if defined(LUA_51)
-    luaL_register(L, "mylib", mylib);
-    /* luaL_openlib(L, "mylib", mylib, 0); */
+    luaL_register(L, "passgen", passgen);
 #elif defined(LUA_52)
-    luaL_newlib(L, mylib);
+    luaL_newlib(L, passgen);
 #endif
     return 1;
 }
